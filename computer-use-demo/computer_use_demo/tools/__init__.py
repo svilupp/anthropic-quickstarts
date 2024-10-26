@@ -3,6 +3,7 @@ from .bash import BashTool
 from .collection import ToolCollection
 from .computer import ComputerTool
 from .edit import EditTool
+from .logger_config import logger
 
 __ALL__ = [
     BashTool,
@@ -11,4 +12,5 @@ __ALL__ = [
     EditTool,
     ToolCollection,
     ToolResult,
+    logger,
 ]

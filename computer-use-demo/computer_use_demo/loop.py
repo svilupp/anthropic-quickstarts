@@ -2,10 +2,12 @@
 Agentic sampling loop that calls the Anthropic API and local implementation of anthropic-defined computer use tools.
 """
 
+import json
 import platform
 from collections.abc import Callable
 from datetime import datetime
 from enum import StrEnum
+from pathlib import Path
 from typing import Any, cast
 
 import httpx
@@ -26,10 +28,30 @@ from anthropic.types.beta import (
     BetaTextBlock,
     BetaTextBlockParam,
     BetaToolResultBlockParam,
+    BetaToolUseBlock,
     BetaToolUseBlockParam,
 )
 
-from .tools import BashTool, ComputerTool, EditTool, ToolCollection, ToolResult
+from .tools import BashTool, ComputerTool, EditTool, ToolCollection, ToolResult, logger
+
+DIR_MESSAGES = Path(__file__).resolve().parent / "messages"
+DIR_MESSAGES.mkdir(exist_ok=True)
+
+
+class CustomJSONEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, BetaTextBlock):
+            return {"type": "text", "text": obj.text}
+        elif isinstance(obj, BetaToolUseBlock):
+            return {
+                "type": "tool_use",
+                "id": obj.id,
+                "name": obj.name,
+                "input": obj.input,
+            }
+        # Handle other custom types here if needed
+        return super().default(obj)
+
 
 COMPUTER_USE_BETA_FLAG = "computer-use-2024-10-22"
 PROMPT_CACHING_BETA_FLAG = "prompt-caching-2024-07-31"
@@ -149,6 +171,17 @@ async def sampling_loop(
         )
 
         response = raw_response.parse()
+        ## Log the messages
+        path_messages = (
+            DIR_MESSAGES / f"{datetime.now().strftime('%Y%m%d_%H%M%S')}__messages.json"
+        )
+        with open(path_messages, "w") as f:
+            json.dump(messages, f)
+        path_response = (
+            DIR_MESSAGES / f"{datetime.now().strftime('%Y%m%d_%H%M%S')}__response.json"
+        )
+        with open(path_response, "w") as f:
+            json.dump(response.content, f, cls=CustomJSONEncoder)
 
         response_params = _response_to_params(response)
         messages.append(
@@ -166,6 +199,7 @@ async def sampling_loop(
                     name=content_block["name"],
                     tool_input=cast(dict[str, Any], content_block["input"]),
                 )
+                logger.info(f"TOOL RESULT> {result.output}")
                 tool_result_content.append(
                     _make_api_tool_result(result, content_block["id"])
                 )

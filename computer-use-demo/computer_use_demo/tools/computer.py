@@ -3,17 +3,21 @@ import base64
 import os
 import shlex
 import shutil
+from datetime import datetime
 from enum import StrEnum
 from pathlib import Path
 from typing import Literal, TypedDict
 from uuid import uuid4
 
 from anthropic.types.beta import BetaToolComputerUse20241022Param
+from loguru import logger
 
 from .base import BaseAnthropicTool, ToolError, ToolResult
 from .run import run
 
-OUTPUT_DIR = "/tmp/outputs"
+# Use an absolute path to ensure consistency regardless of current working directory
+OUTPUT_DIR = Path(__file__).resolve().parent.parent / "outputs"
+OUTPUT_DIR.mkdir(exist_ok=True)
 
 TYPING_DELAY_MS = 12
 TYPING_GROUP_SIZE = 50
@@ -182,6 +186,7 @@ class ComputerTool(BaseAnthropicTool):
                     int(output.split("X=")[1].split("\n")[0]),
                     int(output.split("Y=")[1].split("\n")[0]),
                 )
+                logger.info(f"CURSORPOSITION> X={x},Y={y}")
                 return result.replace(output=f"X={x},Y={y}")
             else:
                 click_arg = {
@@ -198,7 +203,11 @@ class ComputerTool(BaseAnthropicTool):
         """Take a screenshot of the current screen and return the base64 encoded image."""
         output_dir = Path(OUTPUT_DIR)
         output_dir.mkdir(parents=True, exist_ok=True)
-        path = output_dir / f"screenshot_{uuid4().hex}.png"
+        path = (
+            output_dir
+            / f"{datetime.now().strftime('%Y%m%d_%H%M%S')}__screenshot__{uuid4().hex}.png"
+        )
+        logger.info(f"SCREENSHOT> Path: {path}")
 
         # Try gnome-screenshot first
         if shutil.which("gnome-screenshot"):
